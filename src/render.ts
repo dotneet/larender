@@ -15,13 +15,13 @@ export type RenderState = {
   fontSize: number;
 };
 
-export class RenderContext {
+type RenderingResult = {
+  dx: number;
+};
+
+class RenderContext {
   private states: RenderState[] = [];
-  constructor(
-    public canvasCtx: CanvasRenderingContext2D,
-    rootRenderState: RenderState
-  ) {
-    this.canvasCtx = canvasCtx;
+  constructor(rootRenderState: RenderState) {
     this.states.push(rootRenderState);
   }
 
@@ -45,22 +45,69 @@ export type RenderOptions = {
   height: number;
   fillBackground: boolean;
   backgroundColor: string;
+  mainFontFamily: string;
+  mathFontFamily: string;
+  amsFontFamily: string;
+};
+
+export const DefaultRenderOptions: RenderOptions = {
+  fontSize: 48,
+  marginRatio: 0.3,
+  width: 600,
+  height: 200,
+  fillBackground: true,
+  backgroundColor: 'white',
+  mainFontFamily: 'KaTeX_Main',
+  mathFontFamily: 'KaTeX_Math',
+  amsFontFamily: 'KaTeX_AMS',
 };
 
 type TextRenderingOptions = {
   extraMargin: number;
 };
 
-class LatexWriter {
+class LatexRenderer {
   private drawContext: CanvasRenderingContext2D;
+  private renderContext: RenderContext;
 
-  constructor(
-    public renderContext: RenderContext,
-    private options: RenderOptions
-  ) {
-    this.renderContext = renderContext;
-    this.drawContext = renderContext.canvasCtx;
+  constructor(public canvas: Canvas, private options: RenderOptions) {
+    const ctx = canvas.getContext('2d');
+    if (options.fillBackground) {
+      ctx.fillStyle = options.backgroundColor;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+    ctx.fillStyle = 'black';
+
+    this.renderContext = new RenderContext({
+      x: 0,
+      y: Math.ceil(canvas.height / 2),
+      fontSize: options.fontSize,
+    });
+
+    this.drawContext = ctx;
     this.options = options;
+  }
+
+  static create(opts: Partial<RenderOptions> = {}): LatexRenderer {
+    const options: RenderOptions = Object.assign(DefaultRenderOptions, opts);
+    const canvas = createCanvas(options.width, options.height);
+
+    return new LatexRenderer(canvas, options);
+  }
+
+  render(nodes: LatexNode[]) {
+    for (const child of nodes) {
+      this.renderNode(child);
+    }
+  }
+
+  renderWithNewCanvas(
+    nodes: LatexNode[],
+    options: Partial<RenderOptions> = {}
+  ) {
+    const renderer = LatexRenderer.create(options);
+    renderer.render(nodes);
+    return renderer.canvas;
   }
 
   get renderState() {
@@ -80,8 +127,8 @@ class LatexWriter {
     font: string | null = null,
     options: TextRenderingOptions = { extraMargin: 0 }
   ) {
-    let fontName = font || 'KaTeX_Main';
-    const state = this.renderContext.renderState;
+    let fontName = font || this.options.mainFontFamily;
+    const state = this.renderState;
     const mMetrics = measureText('M', fontName, state.fontSize);
     const sideMargin = Math.ceil(options.extraMargin * mMetrics.width);
     state.x += sideMargin;
@@ -97,8 +144,12 @@ class LatexWriter {
   }
 
   fraction(numerator: Canvas, denominator: Canvas): number {
-    const state = this.renderContext.renderState;
-    const metrics = measureText('X', 'KaTeX_Main', state.fontSize);
+    const state = this.renderState;
+    const metrics = measureText(
+      'X',
+      this.options.mainFontFamily,
+      state.fontSize
+    );
     const margin = this.options.marginRatio * metrics.width;
     const width = Math.max(numerator.width, denominator.width);
     const height = numerator.height + denominator.height + metrics.height;
@@ -134,7 +185,11 @@ class LatexWriter {
     const ctx = this.drawContext;
     const contentWidth = contentCanvas.width;
     const contentHeight = contentCanvas.height;
-    const metrics = measureText('M', 'KaTeX_Main', this.renderState.fontSize);
+    const metrics = measureText(
+      'M',
+      this.options.mainFontFamily,
+      this.renderState.fontSize
+    );
     const charHeight = metrics.width;
 
     // draw square root symbol using lineTo
@@ -165,48 +220,242 @@ class LatexWriter {
     this.renderState.x += dx;
     return dx;
   }
+
+  renderNode(node: LatexNode): RenderingResult {
+    if (node.nodeType === NodeType.Plain) {
+      switch (node.token.tokenType) {
+        case TokenType.Superscript: {
+          const state = this.renderState;
+          const scriptFontSize = Math.ceil(state.fontSize / 2);
+          const metrics = measureText(
+            '5',
+            this.options.mainFontFamily,
+            state.fontSize
+          );
+          const scriptMetrics = measureText(
+            '5',
+            this.options.mainFontFamily,
+            scriptFontSize
+          );
+          this.pushState({
+            x: this.renderState.x,
+            y: this.renderState.y - metrics.height + scriptMetrics.height / 2,
+            fontSize: scriptFontSize,
+          });
+          let x = this.renderState.x;
+          node.children.forEach((child) => this.renderNode(child));
+          let dx = this.renderState.x - x;
+          this.popState();
+          return { dx };
+        }
+        case TokenType.Subscript: {
+          const state = this.renderState;
+          const scriptFontSize = Math.ceil(state.fontSize / 2);
+          const metrics = measureText(
+            '5',
+            this.options.mainFontFamily,
+            state.fontSize
+          );
+          const scriptMetrics = measureText(
+            '5',
+            this.options.mainFontFamily,
+            scriptFontSize
+          );
+          this.pushState({
+            x: this.renderState.x,
+            y: this.renderState.y + scriptMetrics.height / 2,
+            fontSize: scriptFontSize,
+          });
+          let x = this.renderState.x;
+          node.children.forEach((child) => this.renderNode(child));
+          let dx = this.renderState.x - x;
+          this.popState();
+          return { dx };
+        }
+        case TokenType.Percent:
+          return this.renderOperator(node, '%');
+        case TokenType.Times:
+          return this.renderOperator(node, '×');
+        case TokenType.Divide:
+          return this.renderOperator(node, '÷');
+        case TokenType.Plus:
+          return this.renderOperator(node, '+');
+        case TokenType.Minus:
+          return this.renderOperator(node, '−');
+        case TokenType.Equals:
+          return this.renderOperator(node, '=');
+        case TokenType.LessThan:
+          return this.renderOperator(node, '<');
+        case TokenType.LessThanOrEqual:
+          return this.renderOperator(node, '≤');
+        case TokenType.GreaterThan:
+          return this.renderOperator(node, '>');
+        case TokenType.GreaterThanOrEqual:
+          return this.renderOperator(node, '≥');
+        case TokenType.Angle:
+          return this.renderText(node, '∠');
+        case TokenType.Square:
+          return this.renderText(node, '□︎', this.options.amsFontFamily);
+        case TokenType.Triangle:
+          return this.renderText(node, '△');
+        case TokenType.Bottom:
+          return this.renderText(node, '⊥');
+        case TokenType.Circle:
+          return this.renderText(node, '∘');
+        case TokenType.Sim:
+          return this.renderText(node, '∼');
+        case TokenType.Simeq:
+          return this.renderText(node, '≃');
+        case TokenType.Equivalent:
+          return this.renderText(node, '≡');
+        case TokenType.Ell:
+          return this.renderText(node, 'ℓ');
+        case TokenType.Pi:
+          return this.renderText(node, 'π');
+        case TokenType.PlusMinus:
+          return this.renderText(node, '±');
+        case TokenType.Cdot:
+          return this.renderText(node, '⋅');
+        case TokenType.Cdots:
+          return this.renderText(node, '⋯');
+        case TokenType.Modulus:
+          return this.renderText(node, 'mod');
+        case TokenType.SquareRoot:
+          return this.renderSquareRoot(node);
+        case TokenType.Dfrac: {
+          return this.renderFraction(node);
+        }
+        case TokenType.Alphabet:
+          return this.renderText(
+            node,
+            node.token.token,
+            this.options.mathFontFamily
+          );
+        case TokenType.Number: {
+          return this.renderText(node, node.token.token);
+        }
+        default:
+          return this.renderText(node, node.token.token);
+      }
+    } else if (node.nodeType === NodeType.PGroup) {
+      let x = this.renderState.x;
+      this.text('(');
+      for (const child of node.children) {
+        this.renderNode(child);
+      }
+      this.text(')');
+      this.renderSubscriptAndSuperscript(node);
+
+      let dx = this.renderState.x - x;
+      return { dx };
+    } else if (node.nodeType === NodeType.BGroup) {
+      let x = this.renderState.x;
+      this.text('[');
+      for (const child of node.children) {
+        this.renderNode(child);
+      }
+      this.text(']');
+      let dx = this.renderState.x - x;
+      return { dx };
+    } else if (node.nodeType === NodeType.CBGroup) {
+      let x = this.renderState.x;
+      for (const child of node.children) {
+        this.renderNode(child);
+      }
+      let dx = this.renderState.x - x;
+      return { dx };
+    }
+    return { dx: 0 };
+  }
+
+  renderOperator(
+    node: LatexNode,
+    text: string,
+    font: string | null = null
+  ): RenderingResult {
+    return this.renderText(node, text, font, { extraMargin: 0.3 });
+  }
+
+  renderText(
+    node: LatexNode,
+    text: string,
+    font: string | null = null,
+    options: TextRenderingOptions = { extraMargin: 0 }
+  ): RenderingResult {
+    if (!font) {
+      font = this.options.mainFontFamily;
+    }
+    const state = this.renderState;
+    let x = state.x;
+    this.text(text, font, options);
+    let result = this.renderSubscriptAndSuperscript(node);
+    this.renderState.x += result.dx;
+    let dx = this.renderState.x - x;
+    return { dx: dx };
+  }
+
+  renderFraction(node: LatexNode): RenderingResult {
+    const numerator = node.children[0];
+    const denominator = node.children[1];
+    const numeratorCanvas = fitToContent(
+      this.renderWithNewCanvas([numerator], {
+        fontSize: this.renderState.fontSize,
+        fillBackground: false,
+      })
+    );
+    const denominatorCanvas = fitToContent(
+      this.renderWithNewCanvas([denominator], {
+        fontSize: this.renderState.fontSize,
+        fillBackground: false,
+      })
+    );
+    const width = this.fraction(numeratorCanvas, denominatorCanvas);
+    return { dx: width };
+  }
+
+  renderSquareRoot(node: LatexNode): RenderingResult {
+    const contentCanvas = fitToContent(
+      this.renderWithNewCanvas(node.children, {
+        fontSize: this.renderState.fontSize,
+        fillBackground: false,
+      })
+    );
+    const width = this.squareRoot(contentCanvas);
+    return { dx: width };
+  }
+
+  renderSubscriptAndSuperscript(node: LatexNode): RenderingResult {
+    let result: RenderingResult | null = null;
+    if (node.superscript) {
+      result = this.renderNode(node.superscript);
+    }
+    if (node.subscript) {
+      result = this.renderNode(node.subscript);
+    }
+    return {
+      dx: result?.dx || 0,
+    };
+  }
 }
 
-export function render(
-  nodes: LatexNode[],
-  opts: Partial<RenderOptions> = {}
-): Canvas {
-  const options: RenderOptions = Object.assign(
-    {
-      fontSize: 20,
-      marginRatio: 0.3,
-      width: 200,
-      height: 200,
-      fillBackground: true,
-      backgroundColor: 'white',
-    },
-    opts
-  );
-
-  const canvas = createCanvas(options.width, options.height);
-  const ctx = canvas.getContext('2d');
-  if (options.fillBackground) {
-    ctx.fillStyle = options.backgroundColor;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-  }
-  ctx.fillStyle = 'black';
-
-  const renderContext = new RenderContext(ctx, {
-    x: 20,
-    y: Math.ceil(canvas.height / 2),
-    fontSize: options.fontSize,
-  });
-
-  const writer = new LatexWriter(renderContext, options);
-  for (const child of nodes) {
-    renderNode(child, writer);
-  }
-  return canvas;
+export function initRendering() {
+  deregisterAllFonts();
+  registerFont('./fonts/KaTeX_AMS-Regular.ttf', { family: 'KaTeX_AMS' });
+  registerFont('./fonts/KaTeX_Main-Regular.ttf', { family: 'KaTeX_Main' });
+  // KaTeX_Math-Italic がなぜか効かないため、KaTeX_Math も KaTeX_Main-Regular にしている
+  registerFont('./fonts/KaTeX_Main-Regular.ttf', { family: 'KaTeX_Math' });
+  // registerFont('./fonts/KaTeX_Math-Italic.ttf', { family: 'KaTeX_Math' });
 }
 
-type RenderingResult = {
-  dx: number;
-};
+export function renderLatex(
+  latex: string,
+  options: Partial<RenderOptions> = {}
+): Buffer {
+  const node = parseLatex(latex);
+  const canvas = LatexRenderer.create(options);
+  canvas.render(node.children);
+  return canvas.canvas.toBuffer();
+}
 
 export function fitToContent(canvas: Canvas): Canvas {
   const ctx = canvas.getContext('2d');
@@ -232,206 +481,4 @@ export function fitToContent(canvas: Canvas): Canvas {
   const newCtx = newCanvas.getContext('2d');
   newCtx.putImageData(ctx.getImageData(minX, minY, width, height), 0, 0);
   return newCanvas;
-}
-
-export function renderNode(
-  node: LatexNode,
-  writer: LatexWriter
-): RenderingResult {
-  if (node.nodeType === NodeType.Plain) {
-    switch (node.token.tokenType) {
-      case TokenType.Superscript: {
-        const state = writer.renderContext.renderState;
-        const scriptFontSize = Math.ceil(state.fontSize / 2);
-        const metrics = measureText('5', 'KaTeX_Main', state.fontSize);
-        const scriptMetrics = measureText('5', 'KaTeX_Main', scriptFontSize);
-        writer.pushState({
-          x: writer.renderContext.renderState.x,
-          y:
-            writer.renderContext.renderState.y -
-            metrics.height +
-            scriptMetrics.height / 2,
-          fontSize: scriptFontSize,
-        });
-        let x = writer.renderState.x;
-        node.children.forEach((child) => renderNode(child, writer));
-        let dx = writer.renderState.x - x;
-        writer.popState();
-        return { dx };
-      }
-      case TokenType.Subscript: {
-        const state = writer.renderContext.renderState;
-        const scriptFontSize = Math.ceil(state.fontSize / 2);
-        const metrics = measureText('5', 'KaTeX_Main', state.fontSize);
-        const scriptMetrics = measureText('5', 'KaTeX_Main', scriptFontSize);
-        writer.pushState({
-          x: writer.renderContext.renderState.x,
-          y: writer.renderContext.renderState.y + scriptMetrics.height / 2,
-          fontSize: scriptFontSize,
-        });
-        let x = writer.renderState.x;
-        node.children.forEach((child) => renderNode(child, writer));
-        let dx = writer.renderState.x - x;
-        writer.popState();
-        return { dx };
-      }
-      case TokenType.Percent:
-        return renderOperator(node, '%', writer);
-      case TokenType.Times:
-        return renderOperator(node, '×', writer);
-      case TokenType.Divide:
-        return renderOperator(node, '÷', writer);
-      case TokenType.Plus:
-        return renderOperator(node, '+', writer);
-      case TokenType.Minus:
-        return renderOperator(node, '−', writer);
-      case TokenType.Equals:
-        return renderOperator(node, '=', writer);
-      case TokenType.LessThan:
-        return renderOperator(node, '<', writer);
-      case TokenType.LessThanOrEqual:
-        return renderOperator(node, '≤', writer);
-      case TokenType.GreaterThan:
-        return renderOperator(node, '>', writer);
-      case TokenType.GreaterThanOrEqual:
-        return renderOperator(node, '≥', writer);
-      case TokenType.Square:
-        return renderText(node, '□︎', writer, 'KaTeX_AMS');
-      case TokenType.Triangle:
-        return renderText(node, '△', writer, 'KaTeX_Main');
-      case TokenType.SquareRoot:
-        return renderSquareRoot(node, writer);
-      case TokenType.Dfrac: {
-        return renderFraction(node, writer);
-      }
-      case TokenType.Alphabet:
-        return renderText(node, node.token.token, writer, 'KaTeX_Math');
-      case TokenType.Number: {
-        return renderText(node, node.token.token, writer);
-      }
-    }
-  } else if (node.nodeType === NodeType.PGroup) {
-    let x = writer.renderContext.renderState.x;
-    writer.text('(');
-    for (const child of node.children) {
-      renderNode(child, writer);
-    }
-    writer.text(')');
-    renderSubscriptAndSuperscript(node, writer);
-
-    let dx = writer.renderContext.renderState.x - x;
-    return { dx };
-  } else if (node.nodeType === NodeType.BGroup) {
-    let x = writer.renderContext.renderState.x;
-    writer.text('[');
-    for (const child of node.children) {
-      renderNode(child, writer);
-    }
-    writer.text(']');
-    let dx = writer.renderContext.renderState.x - x;
-    return { dx };
-  } else if (node.nodeType === NodeType.CBGroup) {
-    let x = writer.renderContext.renderState.x;
-    for (const child of node.children) {
-      renderNode(child, writer);
-    }
-    let dx = writer.renderContext.renderState.x - x;
-    return { dx };
-  }
-  return { dx: 0 };
-}
-
-export function renderOperator(
-  node: LatexNode,
-  text: string,
-  writer: LatexWriter,
-  font: string | null = 'KaTeX_Main'
-): RenderingResult {
-  return renderText(node, text, writer, font, { extraMargin: 0.3 });
-}
-
-export function renderText(
-  node: LatexNode,
-  text: string,
-  writer: LatexWriter,
-  font: string | null = null,
-  options: TextRenderingOptions = { extraMargin: 0 }
-): RenderingResult {
-  const state = writer.renderContext.renderState;
-  let x = state.x;
-  writer.text(text, font, options);
-  let result = renderSubscriptAndSuperscript(node, writer);
-  writer.renderState.x += result.dx;
-  let dx = writer.renderContext.renderState.x - x;
-  return { dx: dx };
-}
-
-export function renderFraction(
-  node: LatexNode,
-  writer: LatexWriter
-): RenderingResult {
-  const numerator = node.children[0];
-  const denominator = node.children[1];
-  const numeratorCanvas = fitToContent(
-    render([numerator], {
-      fontSize: writer.renderContext.renderState.fontSize,
-      fillBackground: false,
-    })
-  );
-  const denominatorCanvas = fitToContent(
-    render([denominator], {
-      fontSize: writer.renderContext.renderState.fontSize,
-      fillBackground: false,
-    })
-  );
-  const width = writer.fraction(numeratorCanvas, denominatorCanvas);
-  return { dx: width };
-}
-
-export function renderSquareRoot(
-  node: LatexNode,
-  writer: LatexWriter
-): RenderingResult {
-  const contentCanvas = fitToContent(
-    render(node.children, {
-      fontSize: writer.renderContext.renderState.fontSize,
-      fillBackground: false,
-    })
-  );
-  const width = writer.squareRoot(contentCanvas);
-  return { dx: width };
-}
-
-export function renderSubscriptAndSuperscript(
-  node: LatexNode,
-  writer: LatexWriter
-): RenderingResult {
-  let result: RenderingResult | null = null;
-  if (node.superscript) {
-    result = renderNode(node.superscript, writer);
-  }
-  if (node.subscript) {
-    result = renderNode(node.subscript, writer);
-  }
-  return {
-    dx: result?.dx || 0,
-  };
-}
-
-export function renderLatex(latex: string): Buffer {
-  deregisterAllFonts();
-  registerFont('./fonts/KaTeX_AMS-Regular.ttf', { family: 'KaTeX_AMS' });
-  registerFont('./fonts/KaTeX_Main-Regular.ttf', { family: 'KaTeX_Main' });
-  // KaTeX_Math-Italic がなぜか効かないため、KaTeX_Math も KaTeX_Main-Regular にしている
-  registerFont('./fonts/KaTeX_Main-Regular.ttf', { family: 'KaTeX_Math' });
-  // registerFont('./fonts/KaTeX_Math-Italic.ttf', { family: 'KaTeX_Math' });
-
-  const node = parseLatex(latex);
-  const canvas = render(node.children, {
-    width: 600,
-    height: 400,
-    fontSize: 48,
-    marginRatio: 0.2,
-  });
-  return canvas.toBuffer();
 }

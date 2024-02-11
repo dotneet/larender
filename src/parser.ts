@@ -105,10 +105,6 @@ export function parseLatex(latex: string): LatexNode {
         context.popState();
         break;
       }
-      // Single Parameter Nodes
-      case TokenType.Sin:
-      case TokenType.Cos:
-      case TokenType.Tan:
       case TokenType.SquareRoot: {
         const node = createNode(token);
         context.addChild(node);

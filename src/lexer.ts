@@ -2,6 +2,28 @@
 
 import { Token, TokenType } from './ast.ts';
 
+export const simpleCharMap: { [key: string]: TokenType } = {
+  '+': TokenType.Plus,
+  '-': TokenType.Minus,
+  '%': TokenType.Percent,
+  '=': TokenType.Equals,
+  '(': TokenType.LParen,
+  ')': TokenType.RParen,
+  '{': TokenType.LBrace,
+  '}': TokenType.RBrace,
+  '[': TokenType.LBracket,
+  ']': TokenType.RBracket,
+  '^': TokenType.Superscript,
+  _: TokenType.Subscript,
+  '.': TokenType.Period,
+  ',': TokenType.Comma,
+  ':': TokenType.Colon,
+  ';': TokenType.Semicolon,
+  '>': TokenType.GreaterThan,
+  '<': TokenType.LessThan,
+  '@': TokenType.At,
+};
+
 export class Lexer {
   private input: string;
   private index: number;
@@ -32,14 +54,9 @@ export class Lexer {
       const char = this.input[this.index];
       if (char === ' ') {
         this.index++;
-      } else if (char === '+') {
+      } else if (simpleCharMap[char] !== undefined) {
         this.token = char;
-        this.tokenType = TokenType.Plus;
-        this.index++;
-        break;
-      } else if (char === '-') {
-        this.token = char;
-        this.tokenType = TokenType.Minus;
+        this.tokenType = simpleCharMap[char];
         this.index++;
         break;
       } else if (char === '\\') {
@@ -55,56 +72,6 @@ export class Lexer {
           }
         }
         this.tokenType = getTokenTypeFromCommand(this.token);
-        break;
-      } else if (char === '%') {
-        this.token = char;
-        this.tokenType = TokenType.Percent;
-        this.index++;
-        break;
-      } else if (char === '=') {
-        this.token = char;
-        this.tokenType = TokenType.Equals;
-        this.index++;
-        break;
-      } else if (char === '(') {
-        this.token = char;
-        this.tokenType = TokenType.LParen;
-        this.index++;
-        break;
-      } else if (char === ')') {
-        this.token = char;
-        this.tokenType = TokenType.RParen;
-        this.index++;
-        break;
-      } else if (char === '{') {
-        this.token = char;
-        this.tokenType = TokenType.LBrace;
-        this.index++;
-        break;
-      } else if (char === '}') {
-        this.token = char;
-        this.tokenType = TokenType.RBrace;
-        this.index++;
-        break;
-      } else if (char === '[') {
-        this.token = char;
-        this.tokenType = TokenType.LBracket;
-        this.index++;
-        break;
-      } else if (char === ']') {
-        this.token = char;
-        this.tokenType = TokenType.RBracket;
-        this.index++;
-        break;
-      } else if (char === '^') {
-        this.token = char;
-        this.tokenType = TokenType.Superscript;
-        this.index++;
-        break;
-      } else if (char === '_') {
-        this.token = char;
-        this.tokenType = TokenType.Subscript;
-        this.index++;
         break;
       } else if (char.match(/[0-9]/)) {
         this.token = char;

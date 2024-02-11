@@ -1,5 +1,5 @@
 import yargs from 'yargs';
-import { renderLatex } from './render';
+import { initRendering, renderLatex } from './render';
 
 import fs from 'fs';
 
@@ -10,7 +10,14 @@ function main() {
 
   const latex = args.latex as string;
   const output = args.output as string;
-  const buffer = renderLatex(latex as string);
+  initRendering();
+  const options = {
+    width: 600,
+    height: 400,
+    fontSize: 48,
+    marginRatio: 0.2,
+  };
+  const buffer = renderLatex(latex as string, options);
   fs.writeFileSync(output, buffer);
 }
 

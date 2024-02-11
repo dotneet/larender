@@ -13,11 +13,13 @@ export enum TokenType {
   // Math Symbols
   Plus = '+',
   Minus = '-',
+  PlusMinus = '\\pm',
   Modulus = '\\mod',
   Percent = '\\%',
   Times = '\\times',
   Divide = '\\div',
   Equals = '=',
+  Equivalent = '\\equiv',
   SquareRoot = '\\sqrt',
   Dfrac = '\\dfrac',
   // Comparison Operators
@@ -26,8 +28,11 @@ export enum TokenType {
   LessThanOrEqual = '\\leq',
   GreaterThanOrEqual = '\\geq',
   // Geometry Symbols
+  Angle = '\\angle',
   Triangle = '\\triangle',
-  Circle = '\\circle',
+  Circle = '\\circ',
+  Sim = '\\sim',
+  Simeq = '\\simeq',
   Square = '\\square',
   Bottom = '\\bot',
   // Parentheses
@@ -39,6 +44,14 @@ export enum TokenType {
   // Curly Brace
   LBrace = '{',
   RBrace = '}',
+  // Comma, Period
+  Comma = ',',
+  Period = '.',
+  Cdot = '\\cdot',
+  Cdots = '\\cdots',
+  // Colon  and Semicolon
+  Colon = ':',
+  Semicolon = ';',
   // Greek Letters
   Alpha = '\\alpha',
   Beta = '\\beta',
@@ -72,7 +85,8 @@ export enum TokenType {
   // Units
   Liter = 'L',
   MilliLiter = 'mL',
-  Ell = 'ell',
+  Ell = '\\ell',
+  At = '@',
 }
 
 export type Token = {
