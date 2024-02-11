@@ -46,6 +46,10 @@ export type RenderOptions = {
   backgroundColor: string;
 };
 
+type TextRenderingOptions = {
+  extraMargin: number;
+};
+
 class LatexWriter {
   private drawContext: CanvasRenderingContext2D;
 
@@ -70,20 +74,30 @@ class LatexWriter {
     return this.renderContext.popState();
   }
 
-  text(text: string, font: string | null = null) {
-    const state = this.renderContext.renderState;
-    const metrics = measureText(text, state.fontSize);
+  text(
+    text: string,
+    font: string | null = null,
+    options: TextRenderingOptions = { extraMargin: 0 }
+  ) {
     let fontName = font || 'KaTeX_Main';
+    const state = this.renderContext.renderState;
+    const mMetrics = measureText('M', fontName, state.fontSize);
+    const sideMargin = Math.ceil(options.extraMargin * mMetrics.width);
+    state.x += sideMargin;
+    const metrics = measureText(text, fontName, state.fontSize);
     const ctxFont = `${state.fontSize}px "${fontName}"`;
     this.drawContext.font = ctxFont;
     this.drawContext.fillText(text, state.x, state.y);
-    const margin = this.options.marginRatio * metrics.width;
-    state.x += metrics.width + margin;
+    if (sideMargin > 0) {
+      state.x += metrics.width + sideMargin;
+    } else {
+      state.x += metrics.width;
+    }
   }
 
   fraction(numerator: Canvas, denominator: Canvas): number {
     const state = this.renderContext.renderState;
-    const metrics = measureText('X', state.fontSize);
+    const metrics = measureText('X', 'KaTeX_Main', state.fontSize);
     const margin = this.options.marginRatio * metrics.width;
     const width = Math.max(numerator.width, denominator.width);
     const height = numerator.height + denominator.height + metrics.height;
@@ -108,16 +122,52 @@ class LatexWriter {
     this.drawContext.drawImage(
       denominator,
       denominatorX,
-      barY + metrics.height * 0.3
+      barY + metrics.height * 0.1
     );
 
     state.x += width + margin;
     return maxWidth;
   }
+
+  squareRoot(contentCanvas: Canvas) {
+    const ctx = this.drawContext;
+    const contentWidth = contentCanvas.width;
+    const contentHeight = contentCanvas.height;
+    const metrics = measureText('M', 'KaTeX_Main', this.renderState.fontSize);
+    const charHeight = metrics.width;
+
+    // draw square root symbol using lineTo
+    const ox = this.renderState.x;
+    const oy = this.renderState.y;
+    const xPadding = charHeight * 0.2;
+    const yPadding = charHeight * 0.2;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(ox, oy);
+    ctx.lineTo(ox + charHeight * 0.3, oy - charHeight * 0.3);
+    ctx.lineTo(ox + charHeight * 0.6, oy + contentHeight / 2);
+    ctx.lineTo(ox + charHeight, oy - contentHeight / 2 - yPadding);
+    ctx.lineTo(
+      ox + charHeight + contentWidth + xPadding,
+      oy - contentHeight / 2 - yPadding
+    );
+    ctx.stroke();
+
+    // draw content
+    ctx.drawImage(
+      contentCanvas,
+      this.renderState.x + charHeight + xPadding,
+      oy - contentHeight / 2
+    );
+
+    const dx = charHeight + xPadding + contentWidth;
+    this.renderState.x += dx;
+    return dx;
+  }
 }
 
 export function render(
-  node: LatexNode,
+  nodes: LatexNode[],
   opts: Partial<RenderOptions> = {}
 ): Canvas {
   const options: RenderOptions = Object.assign(
@@ -147,12 +197,8 @@ export function render(
   });
 
   const writer = new LatexWriter(renderContext, options);
-  if (node.nodeType === NodeType.Root) {
-    for (const child of node.children) {
-      renderNode(child, writer);
-    }
-  } else {
-    renderNode(node, writer);
+  for (const child of nodes) {
+    renderNode(child, writer);
   }
   return canvas;
 }
@@ -196,8 +242,8 @@ export function renderNode(
       case TokenType.Superscript: {
         const state = writer.renderContext.renderState;
         const scriptFontSize = Math.ceil(state.fontSize / 2);
-        const metrics = measureText('5', state.fontSize);
-        const scriptMetrics = measureText('5', scriptFontSize);
+        const metrics = measureText('5', 'KaTeX_Main', state.fontSize);
+        const scriptMetrics = measureText('5', 'KaTeX_Main', scriptFontSize);
         writer.pushState({
           x: writer.renderContext.renderState.x,
           y:
@@ -215,8 +261,8 @@ export function renderNode(
       case TokenType.Subscript: {
         const state = writer.renderContext.renderState;
         const scriptFontSize = Math.ceil(state.fontSize / 2);
-        const metrics = measureText('5', state.fontSize);
-        const scriptMetrics = measureText('5', scriptFontSize);
+        const metrics = measureText('5', 'KaTeX_Main', state.fontSize);
+        const scriptMetrics = measureText('5', 'KaTeX_Main', scriptFontSize);
         writer.pushState({
           x: writer.renderContext.renderState.x,
           y: writer.renderContext.renderState.y + scriptMetrics.height / 2,
@@ -229,21 +275,31 @@ export function renderNode(
         return { dx };
       }
       case TokenType.Percent:
-        return renderText(node, '%', writer, 'KaTeX_Main');
+        return renderOperator(node, '%', writer);
       case TokenType.Times:
-        return renderText(node, '×', writer, 'KaTeX_Main');
+        return renderOperator(node, '×', writer);
       case TokenType.Divide:
-        return renderText(node, '÷', writer, 'KaTeX_Main');
+        return renderOperator(node, '÷', writer);
       case TokenType.Plus:
-        return renderText(node, '+', writer, 'KaTeX_Main');
+        return renderOperator(node, '+', writer);
       case TokenType.Minus:
-        return renderText(node, '−', writer, 'KaTeX_Main');
+        return renderOperator(node, '−', writer);
       case TokenType.Equals:
-        return renderText(node, '=', writer, 'KaTeX_Main');
+        return renderOperator(node, '=', writer);
+      case TokenType.LessThan:
+        return renderOperator(node, '<', writer);
+      case TokenType.LessThanOrEqual:
+        return renderOperator(node, '≤', writer);
+      case TokenType.GreaterThan:
+        return renderOperator(node, '>', writer);
+      case TokenType.GreaterThanOrEqual:
+        return renderOperator(node, '≥', writer);
       case TokenType.Square:
         return renderText(node, '□︎', writer, 'KaTeX_AMS');
       case TokenType.Triangle:
         return renderText(node, '△', writer, 'KaTeX_Main');
+      case TokenType.SquareRoot:
+        return renderSquareRoot(node, writer);
       case TokenType.Dfrac: {
         return renderFraction(node, writer);
       }
@@ -260,6 +316,8 @@ export function renderNode(
       renderNode(child, writer);
     }
     writer.text(')');
+    renderSubscriptAndSuperscript(node, writer);
+
     let dx = writer.renderContext.renderState.x - x;
     return { dx };
   } else if (node.nodeType === NodeType.BGroup) {
@@ -282,15 +340,25 @@ export function renderNode(
   return { dx: 0 };
 }
 
+export function renderOperator(
+  node: LatexNode,
+  text: string,
+  writer: LatexWriter,
+  font: string | null = 'KaTeX_Main'
+): RenderingResult {
+  return renderText(node, text, writer, font, { extraMargin: 0.3 });
+}
+
 export function renderText(
   node: LatexNode,
   text: string,
   writer: LatexWriter,
-  font: string | null = null
+  font: string | null = null,
+  options: TextRenderingOptions = { extraMargin: 0 }
 ): RenderingResult {
   const state = writer.renderContext.renderState;
   let x = state.x;
-  writer.text(text, font);
+  writer.text(text, font, options);
   let result = renderSubscriptAndSuperscript(node, writer);
   writer.renderState.x += result.dx;
   let dx = writer.renderContext.renderState.x - x;
@@ -304,13 +372,13 @@ export function renderFraction(
   const numerator = node.children[0];
   const denominator = node.children[1];
   const numeratorCanvas = fitToContent(
-    render(numerator, {
+    render([numerator], {
       fontSize: writer.renderContext.renderState.fontSize,
       fillBackground: false,
     })
   );
   const denominatorCanvas = fitToContent(
-    render(denominator, {
+    render([denominator], {
       fontSize: writer.renderContext.renderState.fontSize,
       fillBackground: false,
     })
@@ -319,24 +387,24 @@ export function renderFraction(
   return { dx: width };
 }
 
+export function renderSquareRoot(
+  node: LatexNode,
+  writer: LatexWriter
+): RenderingResult {
+  const contentCanvas = fitToContent(
+    render(node.children, {
+      fontSize: writer.renderContext.renderState.fontSize,
+      fillBackground: false,
+    })
+  );
+  const width = writer.squareRoot(contentCanvas);
+  return { dx: width };
+}
+
 export function renderSubscriptAndSuperscript(
   node: LatexNode,
   writer: LatexWriter
 ): RenderingResult {
-  const state = writer.renderContext.renderState;
-  const metrics = measureText('X', state.fontSize);
-  const scriptFontSize = Math.ceil(state.fontSize / 2);
-  const scriptMetrics = measureText('X', scriptFontSize);
-  /*
-  writer.pushState({
-    x: writer.renderContext.renderState.x,
-    y:
-      writer.renderContext.renderState.y -
-      metrics.height +
-      scriptMetrics.height,
-    fontSize: state.fontSize,
-  });
-  */
   let result: RenderingResult | null = null;
   if (node.superscript) {
     result = renderNode(node.superscript, writer);
@@ -344,7 +412,6 @@ export function renderSubscriptAndSuperscript(
   if (node.subscript) {
     result = renderNode(node.subscript, writer);
   }
-  // writer.popState();
   return {
     dx: result?.dx || 0,
   };
@@ -362,12 +429,17 @@ function main() {
   // registerFont('./fonts/KaTeX_Math-Italic.ttf', { family: 'KaTeX_Math' });
 
   // const node = parseLatex('yx^2_2 \\square ABC \\triangle ABC 3^{32}');
-  const node = parseLatex('3 \\dfrac { 35^2_2 } 4 \\times 9 = y(3 + 4) - 5');
-  // printNode(node)
-  const canvas = render(node, {
+  // const node = parseLatex('3 \\dfrac { 35^2_2 } 4 \\times 9 = y(3 + 4)^2 - 5');
+  // const node = parseLatex('x = xxxxx');
+  const node = parseLatex(
+    'y = \\sqrt 3 \\times \\sqrt \\dfrac { 999 } { 4^2 }'
+  );
+  printNode(node);
+  const canvas = render(node.children, {
     width: 600,
     height: 400,
     fontSize: 48,
+    marginRatio: 0.2,
   });
   fs.writeFileSync('test.png', canvas.toBuffer());
 }
