@@ -19,6 +19,8 @@ type RenderingResult = {
   dx: number;
 };
 
+const DUMMY_CHAR = 'M';
+
 class RenderContext {
   private states: RenderState[] = [];
   constructor(rootRenderState: RenderState) {
@@ -40,11 +42,12 @@ class RenderContext {
 
 export type RenderOptions = {
   fontSize: number;
-  marginRatio: number;
   width: number;
   height: number;
   fillBackground: boolean;
   backgroundColor: string;
+  marginRatio: number;
+  operatorMarginRatio: number;
   mainFontFamily: string;
   mathFontFamily: string;
   amsFontFamily: string;
@@ -52,11 +55,12 @@ export type RenderOptions = {
 
 export const DefaultRenderOptions: RenderOptions = {
   fontSize: 48,
-  marginRatio: 0.3,
   width: 600,
   height: 200,
   fillBackground: true,
   backgroundColor: 'white',
+  marginRatio: 0.1,
+  operatorMarginRatio: 0.3,
   mainFontFamily: 'KaTeX_Main',
   mathFontFamily: 'KaTeX_Math',
   amsFontFamily: 'KaTeX_AMS',
@@ -122,14 +126,14 @@ class LatexRenderer {
     return this.renderContext.popState();
   }
 
-  text(
+  drawText(
     text: string,
     font: string | null = null,
     options: TextRenderingOptions = { extraMargin: 0 }
   ) {
     let fontName = font || this.options.mainFontFamily;
     const state = this.renderState;
-    const mMetrics = measureText('M', fontName, state.fontSize);
+    const mMetrics = measureText(DUMMY_CHAR, fontName, state.fontSize);
     const sideMargin = Math.ceil(options.extraMargin * mMetrics.width);
     state.x += sideMargin;
     const metrics = measureText(text, fontName, state.fontSize);
@@ -143,19 +147,17 @@ class LatexRenderer {
     }
   }
 
-  fraction(numerator: Canvas, denominator: Canvas): number {
+  drawFraction(numerator: Canvas, denominator: Canvas): number {
     const state = this.renderState;
     const metrics = measureText(
-      'X',
+      DUMMY_CHAR,
       this.options.mainFontFamily,
       state.fontSize
     );
-    const margin = this.options.marginRatio * metrics.width;
+    const margin = metrics.width * this.options.marginRatio;
     const width = Math.max(numerator.width, denominator.width);
-    const height = numerator.height + denominator.height + metrics.height;
     const barY = state.y - metrics.height / 2;
     const x = state.x;
-    const y = state.y;
     const maxWidth = Math.max(numerator.width, denominator.width);
 
     // draw bar
@@ -181,12 +183,12 @@ class LatexRenderer {
     return maxWidth;
   }
 
-  squareRoot(contentCanvas: Canvas) {
+  drawSquareRoot(contentCanvas: Canvas) {
     const ctx = this.drawContext;
     const contentWidth = contentCanvas.width;
     const contentHeight = contentCanvas.height;
     const metrics = measureText(
-      'M',
+      DUMMY_CHAR,
       this.options.mainFontFamily,
       this.renderState.fontSize
     );
@@ -228,12 +230,12 @@ class LatexRenderer {
           const state = this.renderState;
           const scriptFontSize = Math.ceil(state.fontSize / 2);
           const metrics = measureText(
-            '5',
+            DUMMY_CHAR,
             this.options.mainFontFamily,
             state.fontSize
           );
           const scriptMetrics = measureText(
-            '5',
+            DUMMY_CHAR,
             this.options.mainFontFamily,
             scriptFontSize
           );
@@ -251,13 +253,8 @@ class LatexRenderer {
         case TokenType.Subscript: {
           const state = this.renderState;
           const scriptFontSize = Math.ceil(state.fontSize / 2);
-          const metrics = measureText(
-            '5',
-            this.options.mainFontFamily,
-            state.fontSize
-          );
           const scriptMetrics = measureText(
-            '5',
+            DUMMY_CHAR,
             this.options.mainFontFamily,
             scriptFontSize
           );
@@ -339,22 +336,22 @@ class LatexRenderer {
       }
     } else if (node.nodeType === NodeType.PGroup) {
       let x = this.renderState.x;
-      this.text('(');
+      this.drawText('(');
       for (const child of node.children) {
         this.renderNode(child);
       }
-      this.text(')');
+      this.drawText(')');
       this.renderSubscriptAndSuperscript(node);
 
       let dx = this.renderState.x - x;
       return { dx };
     } else if (node.nodeType === NodeType.BGroup) {
       let x = this.renderState.x;
-      this.text('[');
+      this.drawText('[');
       for (const child of node.children) {
         this.renderNode(child);
       }
-      this.text(']');
+      this.drawText(']');
       let dx = this.renderState.x - x;
       return { dx };
     } else if (node.nodeType === NodeType.CBGroup) {
@@ -373,7 +370,9 @@ class LatexRenderer {
     text: string,
     font: string | null = null
   ): RenderingResult {
-    return this.renderText(node, text, font, { extraMargin: 0.3 });
+    return this.renderText(node, text, font, {
+      extraMargin: this.options.operatorMarginRatio,
+    });
   }
 
   renderText(
@@ -387,9 +386,14 @@ class LatexRenderer {
     }
     const state = this.renderState;
     let x = state.x;
-    this.text(text, font, options);
+    this.drawText(text, font, options);
     let result = this.renderSubscriptAndSuperscript(node);
     this.renderState.x += result.dx;
+
+    const metrics = measureText(DUMMY_CHAR, font, state.fontSize);
+    const margin = Math.ceil(this.options.marginRatio * metrics.width);
+    state.x += margin;
+
     let dx = this.renderState.x - x;
     return { dx: dx };
   }
@@ -409,7 +413,7 @@ class LatexRenderer {
         fillBackground: false,
       })
     );
-    const width = this.fraction(numeratorCanvas, denominatorCanvas);
+    const width = this.drawFraction(numeratorCanvas, denominatorCanvas);
     return { dx: width };
   }
 
@@ -420,7 +424,7 @@ class LatexRenderer {
         fillBackground: false,
       })
     );
-    const width = this.squareRoot(contentCanvas);
+    const width = this.drawSquareRoot(contentCanvas);
     return { dx: width };
   }
 
