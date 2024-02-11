@@ -1,7 +1,11 @@
-# santa-latex-renderer
+# larender
 
-A simple LaTeX parser and renderer.
-Rendering can be done without a browser.
+A simple LaTeX parser and renderer written in TypeScript.
+
+## Features
+
+- rendering without a browser
+- basic math support
 
 ## Setup
 

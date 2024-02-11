@@ -1,5 +1,5 @@
 {
-  "name": "santa-latex-renderer",
+  "name": "larender",
   "module": "index.ts",
   "type": "module",
   "scripts": {
