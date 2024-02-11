@@ -124,12 +124,12 @@ export function parseLatex(latex: string): LatexNode {
       default: {
         const node = createNode(token);
         context.addChild(node);
-        const numOfParams = context.top.node.children.length;
-        if (context.numOfParams === numOfParams) {
-          context.popState();
-        }
         break;
       }
+    }
+    const numOfParams = context.top.node.children.length;
+    if (context.numOfParams === numOfParams) {
+      context.popState();
     }
   }
   return rootNode;
