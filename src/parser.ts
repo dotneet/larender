@@ -37,7 +37,10 @@ class ParseContext {
 
 export function parseLatex(latex: string): LatexNode {
   const lexer = new Lexer(latex);
-  const rootNode = createNode({ token: 'Root', tokenType: TokenType.Unknown });
+  const rootNode = createNode(
+    { token: 'Root', tokenType: TokenType.Unknown },
+    NodeType.Root
+  );
   const context = new ParseContext(rootNode);
   while (lexer.hasMoreTokens()) {
     lexer.nextToken();

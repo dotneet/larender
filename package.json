@@ -2,8 +2,12 @@
   "name": "santa-latex-renderer",
   "module": "index.ts",
   "type": "module",
+  "scripts": {
+    "render": "tsx ./src/render.ts"
+  },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "tsx": "^4.7.1"
   },
   "peerDependencies": {
     "typescript": "^5.0.0"
