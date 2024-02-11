@@ -1,7 +1,17 @@
-import { parseLatex, printNode } from '@/parser';
+import yargs from 'yargs';
+import { renderLatex } from './render';
 
-const node = parseLatex('x^2_2 + (3x + 2) 3^(32)');
-printNode(node);
+import fs from 'fs';
 
-const node2 = parseLatex('\\dfrac 3 2 \\dfrac {11} {22}');
-printNode(node2);
+function main() {
+  const args = yargs(process.argv.slice(2))
+    .command('* <latex> <output>', 'Render LaTeX to an image')
+    .parseSync();
+
+  const latex = args.latex as string;
+  const output = args.output as string;
+  const buffer = renderLatex(latex as string);
+  fs.writeFileSync(output, buffer);
+}
+
+main();

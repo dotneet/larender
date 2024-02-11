@@ -5,8 +5,9 @@ import {
   deregisterAllFonts,
   registerFont,
 } from 'canvas';
-import fs from 'node:fs';
 import { LatexNode, NodeType, TokenType } from './ast.ts';
+import { measureText } from './font.ts';
+import { parseLatex } from './parser.ts';
 
 export type RenderState = {
   x: number;
@@ -417,10 +418,7 @@ export function renderSubscriptAndSuperscript(
   };
 }
 
-import { measureText } from './font.ts';
-import { parseLatex, printNode } from './parser.ts';
-
-function main() {
+export function renderLatex(latex: string): Buffer {
   deregisterAllFonts();
   registerFont('./fonts/KaTeX_AMS-Regular.ttf', { family: 'KaTeX_AMS' });
   registerFont('./fonts/KaTeX_Main-Regular.ttf', { family: 'KaTeX_Main' });
@@ -428,20 +426,12 @@ function main() {
   registerFont('./fonts/KaTeX_Main-Regular.ttf', { family: 'KaTeX_Math' });
   // registerFont('./fonts/KaTeX_Math-Italic.ttf', { family: 'KaTeX_Math' });
 
-  // const node = parseLatex('yx^2_2 \\square ABC \\triangle ABC 3^{32}');
-  // const node = parseLatex('3 \\dfrac { 35^2_2 } 4 \\times 9 = y(3 + 4)^2 - 5');
-  // const node = parseLatex('x = xxxxx');
-  const node = parseLatex(
-    'y = \\sqrt 3 \\times \\sqrt \\dfrac { 999 } { 4^2 }'
-  );
-  printNode(node);
+  const node = parseLatex(latex);
   const canvas = render(node.children, {
     width: 600,
     height: 400,
     fontSize: 48,
     marginRatio: 0.2,
   });
-  fs.writeFileSync('test.png', canvas.toBuffer());
+  return canvas.toBuffer();
 }
-
-main();

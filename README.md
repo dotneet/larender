@@ -1,15 +1,20 @@
 # santa-latex-renderer
 
+A simple LaTeX parser and renderer.
+Rendering can be done without a browser.
+
+## Setup
+
 To install dependencies:
 
 ```bash
-bun install
+npm install
 ```
+
+## Usage
 
 To run:
 
 ```bash
-bun run index.ts
+npm run render 'y = 2x + 1' output.png
 ```
-
-This project was created using `bun init` in bun v1.0.25. [Bun](https://bun.sh) is a fast all-in-one JavaScript runtime.

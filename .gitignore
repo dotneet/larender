@@ -1,5 +1,9 @@
 # Based on https://raw.githubusercontent.com/github/gitignore/main/Node.gitignore
 
+# Editor
+.vscode
+.idea
+
 # Logs
 
 logs

@@ -3,16 +3,18 @@
   "module": "index.ts",
   "type": "module",
   "scripts": {
-    "render": "tsx ./src/render.ts"
+    "render": "tsx ./src/index.ts"
   },
   "devDependencies": {
     "@types/bun": "latest",
-    "tsx": "^4.7.1"
+    "@types/yargs": "^17.0.32"
   },
   "peerDependencies": {
     "typescript": "^5.0.0"
   },
   "dependencies": {
-    "canvas": "^2.11.2"
+    "canvas": "^2.11.2",
+    "tsx": "^4.7.1",
+    "yargs": "^17.7.2"
   }
 }
