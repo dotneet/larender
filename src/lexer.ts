@@ -70,7 +70,8 @@ export class Lexer {
         this.index++;
       } else if (char === '\\') {
         if (this.input[this.index + 1] === '\\') {
-          this.token += '\\';
+          console.log('DOUBLE');
+          this.token += '\\\\';
           this.index += 2;
           this.tokenType = TokenType.DoubleBackslash;
           break;
@@ -89,14 +90,26 @@ export class Lexer {
         this.tokenType = getTokenTypeFromCommand(this.token);
         break;
       } else if (char.match(/[0-9]/)) {
-        this.token = char;
+        let c = char;
+        let token = '';
+        while (c.match(/[0-9]/)) {
+          token += c;
+          this.index++;
+          c = this.input[this.index] || '';
+        }
+        this.token = token;
         this.tokenType = TokenType.Number;
-        this.index++;
         break;
       } else if (char.match(/[a-zA-Z]/)) {
-        this.token = char;
+        let c = char;
+        let token = '';
+        while (c.match(/[a-zA-Z]/)) {
+          token += c;
+          this.index++;
+          c = this.input[this.index] || '';
+        }
+        this.token = token;
         this.tokenType = TokenType.Alphabet;
-        this.index++;
         break;
       } else {
         this.token = char;

@@ -7,7 +7,7 @@ import {
 } from 'canvas';
 import { LatexNode, NodeType, TokenType } from './ast.ts';
 import { measureText } from './font.ts';
-import { parseLatex } from './parser.ts';
+import { parseLatex, printNode } from './parser.ts';
 
 export type RenderState = {
   x: number;
@@ -56,7 +56,7 @@ export type RenderOptions = {
 export const DefaultRenderOptions: RenderOptions = {
   fontSize: 48,
   width: 600,
-  height: 200,
+  height: 400,
   fillBackground: true,
   backgroundColor: 'white',
   marginRatio: 0.1,
@@ -68,6 +68,7 @@ export const DefaultRenderOptions: RenderOptions = {
 
 type TextRenderingOptions = {
   extraMargin: number;
+  fontSize?: number;
 };
 
 class LatexRenderer {
@@ -129,15 +130,22 @@ class LatexRenderer {
   drawText(
     text: string,
     font: string | null = null,
-    options: TextRenderingOptions = { extraMargin: 0 }
+    options: Partial<TextRenderingOptions> = { extraMargin: 0 }
   ) {
-    let fontName = font || this.options.mainFontFamily;
+    const opts: TextRenderingOptions = {
+      ...{
+        extraMargin: 0,
+      },
+      ...options,
+    };
     const state = this.renderState;
-    const mMetrics = measureText(DUMMY_CHAR, fontName, state.fontSize);
-    const sideMargin = Math.ceil(options.extraMargin * mMetrics.width);
+    let fontName = font || this.options.mainFontFamily;
+    const fontSize = opts.fontSize || state.fontSize;
+    const mMetrics = measureText(DUMMY_CHAR, fontName, fontSize);
+    const sideMargin = Math.ceil(opts.extraMargin * mMetrics.width);
     state.x += sideMargin;
-    const metrics = measureText(text, fontName, state.fontSize);
-    const ctxFont = `${state.fontSize}px "${fontName}"`;
+    const metrics = measureText(text, fontName, fontSize);
+    const ctxFont = `${fontSize}px "${fontName}"`;
     this.drawContext.font = ctxFont;
     this.drawContext.fillText(text, state.x, state.y);
     if (sideMargin > 0) {
@@ -225,7 +233,7 @@ class LatexRenderer {
 
   renderNode(node: LatexNode): RenderingResult {
     if (node.nodeType === NodeType.Plain) {
-      switch (node.token.tokenType) {
+      switch (node.token!.tokenType) {
         case TokenType.Superscript: {
           const state = this.renderState;
           const scriptFontSize = Math.ceil(state.fontSize / 2);
@@ -336,16 +344,16 @@ class LatexRenderer {
         case TokenType.Alphabet:
           return this.renderText(
             node,
-            node.token.token,
+            node.token!.token,
             this.options.mathFontFamily
           );
         case TokenType.Number: {
-          return this.renderText(node, node.token.token);
+          return this.renderText(node, node.token!.token);
         }
         case TokenType.Character:
-          return this.renderText(node, node.token.token);
+          return this.renderText(node, node.token!.token);
         default:
-          return this.renderText(node, node.token.token);
+          return this.renderText(node, node.token!.token);
       }
     } else if (node.nodeType === NodeType.PGroup) {
       let x = this.renderState.x;
@@ -377,9 +385,31 @@ class LatexRenderer {
     } else if (node.nodeType === NodeType.Paragraph) {
       this.renderParagraph(node);
       return { dx: 0 };
-    } else if (node.nodeType === NodeType.Line) {
-      this.renderLine(node);
-      return { dx: 0 };
+    } else if (node.nodeType === NodeType.Environment) {
+      const envName = node.token!.token;
+      if (envName === 'cases') {
+        const canvas = fitToContent(
+          this.renderWithNewCanvas(node.children, {
+            fontSize: this.renderState.fontSize,
+            fillBackground: false,
+          })
+        );
+        this.drawText('{', null, { fontSize: canvas.height });
+        const metrics = measureText(
+          '{',
+          this.options.mainFontFamily,
+          canvas.height
+        );
+        this.renderState.x += metrics.width * 0.2;
+        this.drawContext.drawImage(
+          canvas,
+          this.renderState.x,
+          this.renderState.y - canvas.height / 2 - metrics.descent
+        );
+        this.renderState.x += canvas.width;
+      } else {
+        this.render(node.children);
+      }
     }
     return { dx: 0 };
   }
@@ -388,13 +418,30 @@ class LatexRenderer {
     if (node.nodeType !== NodeType.Paragraph) {
       throw new Error('Invalid node type');
     }
-    const linesCanvas = fitToContent(
-      this.renderWithNewCanvas(node.children, {
-        fontSize: this.renderState.fontSize,
-        fillBackground: false,
-      })
-    );
-    this.drawContext.drawImage(linesCanvas, 0, this.renderState.y);
+    const lineCanvases: Canvas[] = [];
+    for (const lineNode of node.children) {
+      const lineCanvas = fitToContent(
+        this.renderWithNewCanvas(lineNode.children, {
+          fontSize: this.renderState.fontSize,
+          fillBackground: false,
+        })
+      );
+      lineCanvases.push(lineCanvas);
+    }
+    for (const lineCanvas of lineCanvases) {
+      this.drawContext.drawImage(
+        lineCanvas,
+        this.renderState.x,
+        this.renderState.y
+      );
+      const metrics = measureText(
+        DUMMY_CHAR,
+        this.options.mainFontFamily,
+        this.renderState.fontSize
+      );
+      const lineMargin = metrics.height * 0.5;
+      this.renderState.y += lineCanvas.height + lineMargin;
+    }
 
     const metrics = measureText(
       DUMMY_CHAR,
@@ -402,30 +449,7 @@ class LatexRenderer {
       this.renderState.fontSize
     );
     const paragraphMargin = metrics.height;
-    this.renderState.y += linesCanvas.height + paragraphMargin;
-  }
-
-  renderLine(node: LatexNode): void {
-    if (node.nodeType !== NodeType.Line) {
-      throw new Error('Invalid node type');
-    }
-    const lineCanvas = fitToContent(
-      this.renderWithNewCanvas(node.children, {
-        fontSize: this.renderState.fontSize,
-        fillBackground: false,
-      })
-    );
-
-    this.drawContext.drawImage(lineCanvas, 0, this.renderState.y);
-
-    const metrics = measureText(
-      DUMMY_CHAR,
-      this.options.mainFontFamily,
-      this.renderState.fontSize
-    );
-    const lineMargin = metrics.height * 0.2;
-    this.renderState.y += lineCanvas.height + lineMargin;
-    this.renderState.x = 0;
+    this.renderState.y += paragraphMargin;
   }
 
   renderOperator(
@@ -442,14 +466,20 @@ class LatexRenderer {
     node: LatexNode,
     text: string,
     font: string | null = null,
-    options: TextRenderingOptions = { extraMargin: 0 }
+    options: Partial<TextRenderingOptions> = {}
   ): RenderingResult {
+    const opts: TextRenderingOptions = {
+      ...{
+        extraMargin: 0,
+      },
+      ...options,
+    };
     if (!font) {
       font = this.options.mainFontFamily;
     }
     const state = this.renderState;
     let x = state.x;
-    this.drawText(text, font, options);
+    this.drawText(text, font, opts);
     let result = this.renderSubscriptAndSuperscript(node);
     this.renderState.x += result.dx;
 

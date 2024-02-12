@@ -110,9 +110,11 @@ export type Token = {
 
 export enum NodeType {
   Document = 'Document',
+  Environment = 'Environment',
   Paragraph = 'Paragraph',
   Line = 'Line',
   Plain = 'Plain',
+
   PGroup = 'Parenthesis',
   BGroup = 'Bracket',
   CBGroup = 'CurlyBrace',
@@ -138,10 +140,24 @@ export const createNode = (
   };
 };
 
+// Node Structure:
+//
+// DocumentNode
+//  - EnvironmentNode
+//    - ParagraphNode
+//      - LineNode
 export const createDocumentNode = (): LatexNode => {
   return createNode(NodeType.Document, [
-    createNode(NodeType.Paragraph, [createNode(NodeType.Line)]),
+    createEnvironmentNode({ token: 'document', tokenType: TokenType.Alphabet }),
   ]);
+};
+
+export const createEnvironmentNode = (envToken: Token): LatexNode => {
+  return createNode(NodeType.Environment, [createParagraphNode()], envToken);
+};
+
+export const createParagraphNode = (): LatexNode => {
+  return createNode(NodeType.Paragraph, [createNode(NodeType.Line)]);
 };
 
 export const createPlainNode = (token: Token): LatexNode => {
