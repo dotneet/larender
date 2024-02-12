@@ -70,7 +70,6 @@ export class Lexer {
         this.index++;
       } else if (char === '\\') {
         if (this.input[this.index + 1] === '\\') {
-          console.log('DOUBLE');
           this.token += '\\\\';
           this.index += 2;
           this.tokenType = TokenType.DoubleBackslash;

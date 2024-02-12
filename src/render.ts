@@ -83,11 +83,12 @@ class LatexRenderer {
     }
     ctx.fillStyle = 'black';
 
-    this.renderContext = new RenderContext({
+    const initialRenderState = {
       x: 0,
-      y: Math.ceil(canvas.height / 2),
+      y: Math.ceil(canvas.height / 2) - options.fontSize,
       fontSize: options.fontSize,
-    });
+    };
+    this.renderContext = new RenderContext(initialRenderState);
 
     this.drawContext = ctx;
     this.options = options;
@@ -130,6 +131,7 @@ class LatexRenderer {
   drawText(
     text: string,
     font: string | null = null,
+    style: string = '',
     options: Partial<TextRenderingOptions> = { extraMargin: 0 }
   ) {
     const opts: TextRenderingOptions = {
@@ -145,7 +147,7 @@ class LatexRenderer {
     const sideMargin = Math.ceil(opts.extraMargin * mMetrics.width);
     state.x += sideMargin;
     const metrics = measureText(text, fontName, fontSize);
-    const ctxFont = `${fontSize}px "${fontName}"`;
+    const ctxFont = `${style} ${fontSize}px "${fontName}"`;
     this.drawContext.font = ctxFont;
     this.drawContext.fillText(text, state.x, state.y);
     if (sideMargin > 0) {
@@ -166,7 +168,8 @@ class LatexRenderer {
     const width = Math.max(numerator.width, denominator.width);
     const barY = state.y - metrics.height / 2;
     const x = state.x;
-    const maxWidth = Math.max(numerator.width, denominator.width);
+    const maxWidth =
+      Math.max(numerator.width, denominator.width) + metrics.width * 0.3;
 
     // draw bar
     this.drawContext.fillRect(x, barY, maxWidth, 2);
@@ -184,7 +187,7 @@ class LatexRenderer {
     this.drawContext.drawImage(
       denominator,
       denominatorX,
-      barY + metrics.height * 0.1
+      barY + metrics.height * 0.3
     );
 
     state.x += width + margin;
@@ -345,7 +348,8 @@ class LatexRenderer {
           return this.renderText(
             node,
             node.token!.token,
-            this.options.mathFontFamily
+            this.options.mathFontFamily,
+            'italic'
           );
         case TokenType.Number: {
           return this.renderText(node, node.token!.token);
@@ -394,12 +398,11 @@ class LatexRenderer {
             fillBackground: false,
           })
         );
-        this.drawText('{', null, { fontSize: canvas.height });
-        const metrics = measureText(
-          '{',
-          this.options.mainFontFamily,
-          canvas.height
-        );
+        const fontFamily = this.options.amsFontFamily;
+        this.drawText('{', fontFamily, '', {
+          fontSize: canvas.height,
+        });
+        const metrics = measureText('{', fontFamily, canvas.height);
         this.renderState.x += metrics.width * 0.2;
         this.drawContext.drawImage(
           canvas,
@@ -457,7 +460,7 @@ class LatexRenderer {
     text: string,
     font: string | null = null
   ): RenderingResult {
-    return this.renderText(node, text, font, {
+    return this.renderText(node, text, font, '', {
       extraMargin: this.options.operatorMarginRatio,
     });
   }
@@ -466,6 +469,7 @@ class LatexRenderer {
     node: LatexNode,
     text: string,
     font: string | null = null,
+    style: string = '',
     options: Partial<TextRenderingOptions> = {}
   ): RenderingResult {
     const opts: TextRenderingOptions = {
@@ -479,7 +483,7 @@ class LatexRenderer {
     }
     const state = this.renderState;
     let x = state.x;
-    this.drawText(text, font, opts);
+    this.drawText(text, font, '', opts);
     let result = this.renderSubscriptAndSuperscript(node);
     this.renderState.x += result.dx;
 
@@ -539,9 +543,14 @@ export function initRendering() {
   deregisterAllFonts();
   registerFont('./fonts/KaTeX_AMS-Regular.ttf', { family: 'KaTeX_AMS' });
   registerFont('./fonts/KaTeX_Main-Regular.ttf', { family: 'KaTeX_Main' });
-  // KaTeX_Math-Italic がなぜか効かないため、KaTeX_Math も KaTeX_Main-Regular にしている
-  registerFont('./fonts/KaTeX_Main-Regular.ttf', { family: 'KaTeX_Math' });
-  // registerFont('./fonts/KaTeX_Math-Italic.ttf', { family: 'KaTeX_Math' });
+  // KaTeX_Math-Italic doesn't works for some reasons, so use lmroman9-italic.otf instead
+  // registerFont('./fonts/KaTeX_Main-Regular.ttf', { family: 'KaTeX_Math' });
+  registerFont('./fonts/lmroman9-italic.otf', {
+    // registerFont('./fonts/KaTeX_Math-Italic.ttf', {
+    family: 'KaTeX_Math',
+    style: 'italic',
+  });
+  // registerFont('./fonts/KaTeX_Math-Italic.ttf', {family: 'KaTeX_Math'});
 }
 
 export function renderLatex(
