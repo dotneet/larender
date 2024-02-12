@@ -59,7 +59,22 @@ export class Lexer {
         this.tokenType = simpleCharMap[char];
         this.index++;
         break;
+      } else if (char === '\n') {
+        // if found empty line, convert it to paragraph
+        if (this.input[this.index + 1] === '\n') {
+          this.token = char + '\n';
+          this.tokenType = TokenType.Paragraph;
+          this.index += 2;
+          break;
+        }
+        this.index++;
       } else if (char === '\\') {
+        if (this.input[this.index + 1] === '\\') {
+          this.token += '\\';
+          this.index += 2;
+          this.tokenType = TokenType.DoubleBackslash;
+          break;
+        }
         this.index++;
         this.token = char;
         while (this.index < this.input.length) {
@@ -84,7 +99,10 @@ export class Lexer {
         this.index++;
         break;
       } else {
-        throw new Error('Invalid Token');
+        this.token = char;
+        this.tokenType = TokenType.Character;
+        this.index++;
+        break;
       }
     }
   }

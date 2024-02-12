@@ -1,4 +1,11 @@
-import { LatexNode, NodeType, TokenType, createNode } from './ast.ts';
+import {
+  LatexNode,
+  NodeType,
+  TokenType,
+  createPlainNode as createPlainNode,
+  createNode,
+  createDocumentNode,
+} from './ast.ts';
 import { Lexer } from './lexer.ts';
 
 type ParseState = {
@@ -11,7 +18,20 @@ class ParseContext {
   private stateStacks: ParseState[] = [];
 
   constructor(private rootNode: LatexNode) {
-    this.stateStacks.push({ node: rootNode, numOfParams: null });
+    const lineNode = rootNode.children[0].children[0];
+    this.stateStacks.push({ node: lineNode, numOfParams: null });
+  }
+
+  public createNewLine() {
+    const node = createNode(NodeType.Line);
+    this.rootNode.children[0].children.push(node);
+    this.stateStacks = [{ node, numOfParams: null }];
+  }
+
+  public createNewParagraph() {
+    const node = createNode(NodeType.Paragraph, [createNode(NodeType.Line)]);
+    this.rootNode.children.push(node);
+    this.stateStacks = [{ node: node.children[0], numOfParams: null }];
   }
 
   public pushState(node: LatexNode, numOfParams: number | null = null) {
@@ -37,10 +57,7 @@ class ParseContext {
 
 export function parseLatex(latex: string): LatexNode {
   const lexer = new Lexer(latex);
-  const rootNode = createNode(
-    { token: 'Root', tokenType: TokenType.Unknown },
-    NodeType.Root
-  );
+  const rootNode = createDocumentNode();
   const context = new ParseContext(rootNode);
   while (lexer.hasMoreTokens()) {
     lexer.nextToken();
@@ -49,7 +66,7 @@ export function parseLatex(latex: string): LatexNode {
       context.top.node.children[context.top.node.children.length - 1];
     switch (token.tokenType) {
       case TokenType.Subscript: {
-        const node = createNode(token);
+        const node = createPlainNode(token);
         if (!lastNode) {
           throw new Error('Subscript without previous node');
         }
@@ -58,7 +75,7 @@ export function parseLatex(latex: string): LatexNode {
         break;
       }
       case TokenType.Superscript: {
-        const node = createNode(token);
+        const node = createPlainNode(token);
         if (!lastNode) {
           throw new Error('Superscript without previous node');
         }
@@ -67,58 +84,68 @@ export function parseLatex(latex: string): LatexNode {
         break;
       }
       case TokenType.LParen: {
-        const node = createNode(token, NodeType.PGroup);
+        const node = createNode(NodeType.PGroup, [], token);
         context.addChild(node);
         context.pushState(node);
         break;
       }
       case TokenType.RParen: {
-        if (context.top.node.token.tokenType !== TokenType.LParen) {
+        if (context.top.node.token?.tokenType !== TokenType.LParen) {
           throw new Error('Mismatched Parenthesis');
         }
         context.popState();
         break;
       }
       case TokenType.LBracket: {
-        const node = createNode(token, NodeType.BGroup);
+        const node = createNode(NodeType.BGroup, [], token);
         context.addChild(node);
         context.pushState(node);
         break;
       }
       case TokenType.RBracket: {
-        if (context.top.node.token.tokenType !== TokenType.LBracket) {
+        if (context.top.node.token?.tokenType !== TokenType.LBracket) {
           throw new Error('Mismatched Bracket');
         }
         context.popState();
         break;
       }
       case TokenType.LBrace: {
-        const node = createNode(token, NodeType.CBGroup);
+        const node = createNode(NodeType.CBGroup, [], token);
         context.addChild(node);
         context.pushState(node);
         break;
       }
       case TokenType.RBrace: {
-        if (context.top.node.token.tokenType !== TokenType.LBrace) {
+        if (context.top.node.token?.tokenType !== TokenType.LBrace) {
           throw new Error('Mismatched Brace');
         }
         context.popState();
         break;
       }
       case TokenType.SquareRoot: {
-        const node = createNode(token);
+        const node = createPlainNode(token);
         context.addChild(node);
         context.pushState(node, 1);
         break;
       }
       case TokenType.Dfrac: {
-        const node = createNode(token);
+        const node = createPlainNode(token);
         context.addChild(node);
         context.pushState(node, 2);
         break;
       }
+      case TokenType.DoubleBackslash:
+      case TokenType.Newline: {
+        console.log('parse Newline');
+        context.createNewLine();
+        break;
+      }
+      case TokenType.Paragraph: {
+        context.createNewParagraph();
+        break;
+      }
       default: {
-        const node = createNode(token);
+        const node = createPlainNode(token);
         context.addChild(node);
         break;
       }
@@ -132,7 +159,7 @@ export function parseLatex(latex: string): LatexNode {
 }
 
 export function printNode(node: LatexNode, depth = 0) {
-  console.log('  '.repeat(depth), node.token.token);
+  console.log('  '.repeat(depth), node.token?.token || '-');
   node.superscript && printNode(node.superscript, depth + 1);
   node.subscript && printNode(node.subscript, depth + 1);
   node.children.forEach((child) => printNode(child, depth + 2));

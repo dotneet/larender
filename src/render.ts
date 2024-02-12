@@ -279,6 +279,8 @@ class LatexRenderer {
           return this.renderOperator(node, '+');
         case TokenType.Minus:
           return this.renderOperator(node, '−');
+        case TokenType.PlusMinus:
+          return this.renderOperator(node, '±');
         case TokenType.Equals:
           return this.renderOperator(node, '=');
         case TokenType.LessThan:
@@ -289,6 +291,22 @@ class LatexRenderer {
           return this.renderOperator(node, '>');
         case TokenType.GreaterThanOrEqual:
           return this.renderOperator(node, '≥');
+        case TokenType.Sim:
+          return this.renderOperator(node, '∼');
+        case TokenType.Simeq:
+          return this.renderOperator(node, '≃');
+        case TokenType.Equivalent:
+          return this.renderOperator(node, '≡');
+        case TokenType.Infinity:
+          return this.renderText(node, '∞');
+        case TokenType.Summation:
+          return this.renderText(node, '∑');
+        case TokenType.Product:
+          return this.renderText(node, '∏');
+        case TokenType.Integrate:
+          return this.renderText(node, '∫');
+        case TokenType.Limit:
+          return this.renderText(node, 'lim');
         case TokenType.Angle:
           return this.renderText(node, '∠');
         case TokenType.Square:
@@ -299,24 +317,17 @@ class LatexRenderer {
           return this.renderText(node, '⊥');
         case TokenType.Circle:
           return this.renderText(node, '∘');
-        case TokenType.Sim:
-          return this.renderText(node, '∼');
-        case TokenType.Simeq:
-          return this.renderText(node, '≃');
-        case TokenType.Equivalent:
-          return this.renderText(node, '≡');
         case TokenType.Ell:
           return this.renderText(node, 'ℓ');
-        case TokenType.Pi:
-          return this.renderText(node, 'π');
-        case TokenType.PlusMinus:
-          return this.renderText(node, '±');
         case TokenType.Cdot:
           return this.renderText(node, '⋅');
         case TokenType.Cdots:
           return this.renderText(node, '⋯');
         case TokenType.Modulus:
           return this.renderText(node, 'mod');
+        // Greeks
+        case TokenType.Pi:
+          return this.renderText(node, 'π');
         case TokenType.SquareRoot:
           return this.renderSquareRoot(node);
         case TokenType.Dfrac: {
@@ -331,6 +342,8 @@ class LatexRenderer {
         case TokenType.Number: {
           return this.renderText(node, node.token.token);
         }
+        case TokenType.Character:
+          return this.renderText(node, node.token.token);
         default:
           return this.renderText(node, node.token.token);
       }
@@ -361,8 +374,58 @@ class LatexRenderer {
       }
       let dx = this.renderState.x - x;
       return { dx };
+    } else if (node.nodeType === NodeType.Paragraph) {
+      this.renderParagraph(node);
+      return { dx: 0 };
+    } else if (node.nodeType === NodeType.Line) {
+      this.renderLine(node);
+      return { dx: 0 };
     }
     return { dx: 0 };
+  }
+
+  renderParagraph(node: LatexNode): void {
+    if (node.nodeType !== NodeType.Paragraph) {
+      throw new Error('Invalid node type');
+    }
+    const linesCanvas = fitToContent(
+      this.renderWithNewCanvas(node.children, {
+        fontSize: this.renderState.fontSize,
+        fillBackground: false,
+      })
+    );
+    this.drawContext.drawImage(linesCanvas, 0, this.renderState.y);
+
+    const metrics = measureText(
+      DUMMY_CHAR,
+      this.options.mainFontFamily,
+      this.renderState.fontSize
+    );
+    const paragraphMargin = metrics.height;
+    this.renderState.y += linesCanvas.height + paragraphMargin;
+  }
+
+  renderLine(node: LatexNode): void {
+    if (node.nodeType !== NodeType.Line) {
+      throw new Error('Invalid node type');
+    }
+    const lineCanvas = fitToContent(
+      this.renderWithNewCanvas(node.children, {
+        fontSize: this.renderState.fontSize,
+        fillBackground: false,
+      })
+    );
+
+    this.drawContext.drawImage(lineCanvas, 0, this.renderState.y);
+
+    const metrics = measureText(
+      DUMMY_CHAR,
+      this.options.mainFontFamily,
+      this.renderState.fontSize
+    );
+    const lineMargin = metrics.height * 0.2;
+    this.renderState.y += lineCanvas.height + lineMargin;
+    this.renderState.x = 0;
   }
 
   renderOperator(

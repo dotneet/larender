@@ -2,10 +2,19 @@
 export enum TokenType {
   Unknown = 'Unknown',
 
+  // Layout
+  DoubleBackslash = '\\\\',
+  Newline = '\\newline',
+  Paragraph = '\\par',
+  Begin = '\\begin',
+  End = '\\end',
+
   // Number
   Number = 'Number',
   // alphabets
   Alphabet = 'Alphabet',
+  // character
+  Character = 'Character',
   // subscripts
   Subscript = '_',
   // superscripts
@@ -22,6 +31,11 @@ export enum TokenType {
   Equivalent = '\\equiv',
   SquareRoot = '\\sqrt',
   Dfrac = '\\dfrac',
+  Infinity = '\\infty',
+  Integrate = '\\int',
+  Summation = '\\sum',
+  Product = '\\prod',
+  Limit = '\\lim',
   // Comparison Operators
   LessThan = '<',
   GreaterThan = '>',
@@ -95,7 +109,9 @@ export type Token = {
 };
 
 export enum NodeType {
-  Root = 'Root',
+  Document = 'Document',
+  Paragraph = 'Paragraph',
+  Line = 'Line',
   Plain = 'Plain',
   PGroup = 'Parenthesis',
   BGroup = 'Bracket',
@@ -104,20 +120,30 @@ export enum NodeType {
 
 export type LatexNode = {
   nodeType: string;
-  token: Token;
+  token: Token | null;
   children: LatexNode[];
   subscript?: LatexNode;
   superscript?: LatexNode;
 };
 
 export const createNode = (
-  token: Token,
   nodeType: NodeType = NodeType.Plain,
-  children: LatexNode[] = []
+  children: LatexNode[] = [],
+  token: Token | null = null
 ): LatexNode => {
   return {
     token,
     nodeType,
     children,
   };
+};
+
+export const createDocumentNode = (): LatexNode => {
+  return createNode(NodeType.Document, [
+    createNode(NodeType.Paragraph, [createNode(NodeType.Line)]),
+  ]);
+};
+
+export const createPlainNode = (token: Token): LatexNode => {
+  return createNode(NodeType.Plain, [], token);
 };
